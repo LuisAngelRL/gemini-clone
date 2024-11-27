@@ -10,14 +10,14 @@ const clearChatButton =document.getElementById("deleteButton");
 let currentUserMessage = null;
 let isGeneratingResponse = false;
 
-const GOOGLE_API_KEY = 'AIzaSyDJGX50Yh3-75HLxR932QiLKQCMITTA6Xw';
+const GOOGLE_API_KEY = 'AIzaSyADZpBOuWimtm0UDI6JAa9zdF6QMEdTOS4';
 const API_REQUEST_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GOOGLE_API_KEY}`;
 
 //datos guardados de localstorage 
 
 const loadSavedChatHistory = () =>{
     const savedConversations = JSON.parse(localStorage.getItem("saved-api-chats")) || [];
-    const isLightTheme = localStorage.getItem("theme-color") === "light_mode";
+    const isLightTheme = localStorage.getItem("themeColor") === "light_mode";
 
     document.body.classList.toggle("light_mode",isLightTheme);
     themeToggleButton.innerHTML = isLightTheme ? '<i class="bx bx-moon"></i>' : '<i class = "bx bx-sun"></i>';
@@ -25,9 +25,9 @@ const loadSavedChatHistory = () =>{
     chatHistoryContainer.innerHTML = '';
 
     //iterar el historial guardado y mostrar mensajes
-    savedConversations.array.forEach(conversation => {
+    savedConversations.forEach(conversation => {
         //mostrar el mensaje del usuario
-        const currentUserMessageHtml = `
+        const UserMessageHtml = `
             <div class="message__content">
                 <img class="message__avatar" src="assets/profile.png" alt="User avatar">
                 <p class="message__text">${conversation.userMessage}</p>
@@ -38,14 +38,14 @@ const loadSavedChatHistory = () =>{
         chatHistoryContainer.appendChild(outgoingMessageElement);
 
         //Muestra la respuesta de la api
-        const responseText= conversation.apiResponse?.conditates?.[0]?.content?.parts?.[0]?.text;
+        const responseText= conversation.apiResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
 
         const parsedApiResponse = marked.parse(responseText); //Convertir a HTML
         const rawApiResponse = responseText; //texto plano
 
         const responseHtml = `
             <div class= "message__content">
-                <img class = "message__avatar" src= "assets/gemini.svg" alt="Gemini Avatar">
+                
                 <p class="message__text"></p>
                 <div class="message__loading-indicator hide">
                     <div class= "message__loading-bar"></div>
@@ -75,7 +75,7 @@ const loadSavedChatHistory = () =>{
 
 //crear un nuevo chat
 
-const createChatMessageElement = a(htmlContent, ...cssClasses) => {
+const createChatMessageElement = (htmlContent, ...cssClasses) => {
     const messageElement = document.createElement("div");
     messageElement.classList.add("message", ...cssClasses);
     messageElement.innerHTML = htmlContent;
@@ -121,7 +121,7 @@ const showTypingEffect = (rawText, htmlText, messageElement, incomingMessageElem
 //fetch api 
 
 const requestApiResponse = async(incomingMessageElement)=>{
-    const messageElement = incomingMessageElement.querySelector(".message__text");
+    const messageTextElement = incomingMessageElement.querySelector(".message__text");
 
     try{
         const response= await fetch(API_REQUEST_URL,{
@@ -135,7 +135,7 @@ const requestApiResponse = async(incomingMessageElement)=>{
         const responseData = await response.json();
         if(!response.ok) throw new Error(responseData.error.message);
 
-        const responseText = responseData?.conditates?.[0]?.content?.parts?.[0]?.text;
+        const responseText = responseData?.candidates?.[0]?.content?.parts?.[0]?.text;
         if(!responseText) throw new Error("Invalid API response.");
 
         const parsedApiResponse = marked.parse(responseText);
@@ -189,7 +189,7 @@ const addCopyButtonToCodeBlocks = () =>{
                 setTimeout(() => copyButton.innerHTML =`<i class='bx bx-copy'></i>`,2000);
             }).catch(err =>{
                 console.error("Copy failed:",err);
-                alert("Unable to copy text");
+                alert("No se pudo copiar el texto");
             });
         });
     });
@@ -200,7 +200,6 @@ const displayLoadingAnimation = ()=>{
     const loadingHtml = `
     
         <div class="message__content">
-            <img class="message__avatar" src"assets/gemini.svg" alt="Gemini avatar">
             <p class="message__text"></p>
             <div class= "message__loading-indicator">
                 <div class="message__loading-bar"></div>
@@ -222,10 +221,92 @@ const displayLoadingAnimation = ()=>{
 //Copiar mensaje al portapapels
 
 const copyMessageToClipboard = (copyButton) =>{
-    const messageContent = copyButton.parentElement.querySelector("message--text").innerText;
+    const messageContent = copyButton.parentElement.querySelector("message__text").innerText;
 
     navigator.clipboard.writeText(messageContent);
     copyButton.innerHTML = `<i class='bx bx-check'></i>`
     setTimeout(() => copyButton.innerHTML = `<i class='bx bx-copy'></i>`,1000);
 };
 
+//envio de mensajes
+const handleOutgoingMessage = ()=>{
+    currentUserMessage= messageForm.querySelector(".prompt__form-input").value.trim() || currentUserMessage;
+    if (!currentUserMessage || isGeneratingResponse) return;
+
+            //salir si ya se genero la respuesta o si no hay mensaje
+
+    isGeneratingResponse = true;
+
+    const outgoingMessageHtml= `
+    
+        <div class="message__content">
+            <img class="message__avatar" src="assets/profile.png" alt="user avatar">
+            <p class="message__text"></p>
+        </div>
+    `;
+
+    const outgoingMessageElement= createChatMessageElement(outgoingMessageHtml,"message--outgoing");
+    outgoingMessageElement.querySelector(".message__text").innerText =currentUserMessage;
+    chatHistoryContainer.appendChild(outgoingMessageElement);
+
+    messageForm.reset();
+    document.body.classList.add("hide-header");
+    setTimeout(displayLoadingAnimation,500);
+};
+
+//modo oscuro y claro
+
+themeToggleButton.addEventListener('click',()=>{
+    const isLightTheme = document.body.classList.toggle("light_mode");
+    localStorage.setItem("themeColor",isLightTheme ? "light_mode": "dark_mode");
+
+    //actualizar iconito dependiendo del tema
+    const newIconClass = isLightTheme ? "bx bx-moon" : "bx bx-sun";
+    themeToggleButton.querySelector("i").className = newIconClass;
+});
+
+//limpiar historial
+clearChatButton.addEventListener('click',()=>{
+    if(confirm("¿Seguro que quieres borrar el historial?")) {
+        localStorage.removeItem("saved-api-chats");
+
+        //recargar el historial
+        loadSavedChatHistory();
+
+        currentUserMessage = null;
+        isGeneratingResponse = false;
+    }
+});
+
+
+//click en items sugeridos
+
+suggestionItems.forEach(suggestion =>{
+    suggestion.addEventListener('click', () =>{
+        currentUserMessage = suggestion.querySelector(".suggests__item-text").innerText;
+        handleOutgoingMessage();
+    });
+});
+
+//prevenir el envio por defecto del formulario
+messageForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleOutgoingMessage();
+});
+
+//cargar el historial del chat guardado al recargar
+loadSavedChatHistory();
+
+
+// const handleBackResponse = async () =>{
+//     try{
+//         const response = await fetch('http://localhost:3000/prueba');
+//         const data = await response.json();
+//         console.log('Datos recibidos del backend:', data);
+//         const formatData = `Datos: ${data.mensaje}`
+//     }catch (error){
+//         console.error('error xd')
+//     }
+// }
+
+// handleBackResponse()
